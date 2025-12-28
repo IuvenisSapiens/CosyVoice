@@ -23,7 +23,7 @@ import librosa
 import ffmpeg
 import shutil
 from funasr import AutoModel
-from cosyvoice.cli.cosyvoice import CosyVoice, CosyVoice2
+from cosyvoice.cli.cosyvoice import CosyVoice, CosyVoice2, CosyVoice3
 from cosyvoice.utils.file_utils import load_wav, logging
 from cosyvoice.utils.common import set_all_random_seed
 
@@ -770,7 +770,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir",
         type=str,
-        default="pretrained_models/CosyVoice2-0.5B",
+        default="pretrained_models/Fun-CosyVoice3-0.5B",
+        # default="pretrained_models/CosyVoice2-0.5B",
         # default="pretrained_models/CosyVoice-300M",
         # default="pretrained_models/CosyVoice-300M-25Hz",
         # default="pretrained_models/CosyVoice-300M-Instruct",
@@ -784,7 +785,10 @@ if __name__ == "__main__":
         try:
             cosyvoice = CosyVoice2(args.model_dir)
         except Exception:
-            raise TypeError("no valid model_type!")
+            try:
+                cosyvoice = CosyVoice3(args.model_dir)
+            except Exception:
+                raise TypeError("no valid model_type!")
     sft_spk = cosyvoice.list_available_spks()
     if len(sft_spk) == 0:
         sft_spk = ['']
