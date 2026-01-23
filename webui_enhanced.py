@@ -523,7 +523,7 @@ def main():
             "希望你以后能够做的比我还好呦。",
             "I am a newly launched generative speech large model by the Qwen Voice Team of the Tongyi Laboratory, offering comfortable and natural text-to-speech synthesis capabilities.",
             "收到好友从远方寄来的生日礼物，那份意外的惊喜与深深的祝福让我心中充满了甜蜜的快乐，笑容如花儿般绽放。",
-            "用粤语说这句话<|endofprompt|>我最近迷上一部经典港剧，入面嗰啲对白真系有嚟头。",
+            "You are a helpful assistant. 请用广东话表达。<|endofprompt|>我最近迷上一部经典港剧，入面嗰啲对白真系有嚟头。",
         ]
         tts_text = gr.Textbox(
             label="输入合成文本",
