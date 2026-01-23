@@ -18,6 +18,7 @@ import os
 import json
 import torch
 import torchaudio
+import numpy as np
 import logging
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 logging.basicConfig(level=logging.DEBUG,
@@ -42,12 +43,58 @@ def read_json_lists(list_file):
 
 
 def load_wav(wav, target_sr, min_sr=16000):
-    speech, sample_rate = torchaudio.load(wav, backend='soundfile')
-    speech = speech.mean(dim=0, keepdim=True)
-    if sample_rate != target_sr:
-        assert sample_rate >= min_sr, 'wav sample rate {} must be greater than {}'.format(sample_rate, target_sr)
-        speech = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)(speech)
-    return speech
+    """Load audio from a path or in-memory audio.
+
+    Supports:
+    - file path (str)
+    - (np.ndarray, samplerate) or (torch.Tensor, samplerate) tuples
+    - np.ndarray or torch.Tensor (assumed to be waveform; samplerate unknown, treated as already at target_sr)
+
+    Returns:
+        speech: torch.Tensor shaped (1, N) with sample rate == target_sr
+    """
+    # Case 1: file path -> use torchaudio (soundfile backend)
+    if isinstance(wav, str):
+        speech, sample_rate = torchaudio.load(wav, backend='soundfile')
+        speech = speech.mean(dim=0, keepdim=True)
+        if sample_rate != target_sr:
+            assert sample_rate >= min_sr, 'wav sample rate {} must be greater than {}'.format(sample_rate, target_sr)
+            speech = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)(speech)
+        return speech
+
+    # Case 2: (array, sr) tuples
+    if isinstance(wav, (tuple, list)) and len(wav) == 2:
+        arr, sr = wav
+        # convert to torch tensor
+        if isinstance(arr, np.ndarray):
+            tensor = torch.from_numpy(arr.copy())
+        elif isinstance(arr, torch.Tensor):
+            tensor = arr
+        else:
+            # try to coerce
+            tensor = torch.tensor(arr)
+        if tensor.ndim == 1:
+            tensor = tensor.unsqueeze(0)
+        if sr != target_sr:
+            assert sr >= min_sr, 'wav sample rate {} must be greater than {}'.format(sr, target_sr)
+            tensor = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr)(tensor)
+        return tensor
+
+    # Case 3: raw numpy array or torch tensor (assume already at target_sr)
+    if isinstance(wav, np.ndarray):
+        tensor = torch.from_numpy(wav.copy())
+        if tensor.ndim == 1:
+            tensor = tensor.unsqueeze(0)
+        return tensor
+
+    if isinstance(wav, torch.Tensor):
+        tensor = wav
+        if tensor.ndim == 1:
+            tensor = tensor.unsqueeze(0)
+        return tensor
+
+    # Unknown type
+    raise ValueError(f"Unsupported audio input type: {type(wav)}")
 
 
 def convert_onnx_to_trt(trt_model, trt_kwargs, onnx_model, fp16):

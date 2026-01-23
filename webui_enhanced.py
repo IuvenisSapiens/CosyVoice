@@ -12,17 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+# Set TensorFlow environment variables early to suppress oneDNN INFO messages and lower TF log level
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# Silence Hugging Face Transformers warnings (e.g., Sliding Window Attention not implemented)
+# try:
+#     from transformers import logging as hf_logging
+#     hf_logging.set_verbosity_error()
+# except Exception:
+#     pass
 import sys
 import argparse
 import gradio as gr
 import numpy as np
 import torch
-import torchaudio
 import random
 import librosa
+import soundfile as sf
 import ffmpeg
 import shutil
 from funasr import AutoModel
+from modelscope import snapshot_download
 from cosyvoice.cli.cosyvoice import CosyVoice, CosyVoice2, CosyVoice3
 from cosyvoice.utils.file_utils import load_wav, logging
 from cosyvoice.utils.common import set_all_random_seed
@@ -30,9 +40,9 @@ from cosyvoice.utils.common import set_all_random_seed
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append("{}/third_party/Matcha-TTS".format(ROOT_DIR))
 os.environ["no_proxy"] = "localhost, 127.0.0.1, ::1"
-
-
-model_dir = "iic/SenseVoiceSmall"
+snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='pretrained_models/Fun-CosyVoice3-0.5B')
+snapshot_download('iic/SenseVoiceSmall', local_dir='pretrained_models/SenseVoiceSmall')
+model_dir = "pretrained_models/SenseVoiceSmall"
 asr_model = AutoModel(
     model=model_dir, disable_update=True, log_level="DEBUG", device="cuda:0"
 )
@@ -227,10 +237,17 @@ def generate_audio(
         if prompt_wav is None:
             gr.Warning("prompt音频为空，您是否忘记输入prompt音频？")
             yield (cosyvoice.sample_rate, default_data)
-        if torchaudio.info(prompt_wav).sample_rate < prompt_sr:
+        try:
+            sr = sf.info(prompt_wav).samplerate
+        except Exception:
+            sr = None
+        if sr is None:
+            gr.Warning("无法读取prompt音频采样率，请检查文件格式")
+            yield (cosyvoice.sample_rate, default_data)
+        if sr < prompt_sr:
             gr.Warning(
                 "prompt音频采样率{}低于{}".format(
-                    torchaudio.info(prompt_wav).sample_rate, prompt_sr
+                    sr, prompt_sr
                 )
             )
             yield (cosyvoice.sample_rate, default_data)
@@ -491,10 +508,7 @@ def main():
     with gr.Blocks() as demo:
         gr.Markdown(
             "### 代码库 [CosyVoice](https://github.com/FunAudioLLM/CosyVoice) \
-                    预训练模型 [CosyVoice2-0.5B](https://www.modelscope.cn/models/iic/CosyVoice2-0.5B) \
-                    [CosyVoice-300M](https://www.modelscope.cn/models/iic/CosyVoice-300M) \
-                    [CosyVoice-300M-Instruct](https://www.modelscope.cn/models/iic/CosyVoice-300M-Instruct) \
-                    [CosyVoice-300M-SFT](https://www.modelscope.cn/models/iic/CosyVoice-300M-SFT)"
+                预训练模型 [Fun-CosyVoice3-0.5B](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512)"
         )
         gr.Markdown("#### 请输入需要合成的文本，选择推理模式，并按照提示步骤进行操作")
         gr.Markdown(
@@ -571,7 +585,7 @@ def main():
                 mode_checkbox_group = gr.Radio(
                     choices=inference_mode_list,
                     label="选择推理模式",
-                    value=inference_mode_list[0],
+                    value=inference_mode_list[1],
                 )
                 sft_dropdown = gr.Dropdown(
                     choices=sft_spk,
@@ -771,11 +785,6 @@ if __name__ == "__main__":
         "--model_dir",
         type=str,
         default="pretrained_models/Fun-CosyVoice3-0.5B",
-        # default="pretrained_models/CosyVoice2-0.5B",
-        # default="pretrained_models/CosyVoice-300M",
-        # default="pretrained_models/CosyVoice-300M-25Hz",
-        # default="pretrained_models/CosyVoice-300M-Instruct",
-        # default="pretrained_models/CosyVoice-300M-SFT",
         help="local path or modelscope repo id",
     )
     args = parser.parse_args()
