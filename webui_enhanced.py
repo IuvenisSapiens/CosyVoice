@@ -35,7 +35,7 @@ from funasr import AutoModel
 from modelscope import snapshot_download
 from cosyvoice.cli.cosyvoice import CosyVoice, CosyVoice2, CosyVoice3
 from cosyvoice.utils.file_utils import load_wav, logging
-from cosyvoice.utils.common import set_all_random_seed
+from cosyvoice.utils.common import set_all_random_seed, instruct_list
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append("{}/third_party/Matcha-TTS".format(ROOT_DIR))
@@ -46,6 +46,28 @@ model_dir = "pretrained_models/SenseVoiceSmall"
 asr_model = AutoModel(
     model=model_dir, disable_update=True, log_level="DEBUG", device="cuda:0"
 )
+# instruct_list.append("You are a helpful assistant. 请用中文表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用英语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用日语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用韩语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用德语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用西班牙语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用法语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用意大利语表达。<|endofprompt|>")
+# instruct_list.append("You are a helpful assistant. 请用俄语表达。<|endofprompt|>")
+instruct_list.extend([
+    "You are a helpful assistant. 请用中文表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用英语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用日语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用韩语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用德语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用西班牙语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用法语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用意大利语表达。<|endofprompt|>",
+    "You are a helpful assistant. 请用俄语表达。<|endofprompt|>"
+])
+
+
 
 
 def prompt_wav_recognition(prompt_wav):
@@ -200,7 +222,7 @@ def generate_audio(
         prompt_wav = None
     # if instruct mode, please make sure that model is iic/CosyVoice-300M-Instruct and not cross_lingual mode
     if mode_checkbox_group in ["自然语言控制"]:
-        if "CosyVoice2" in args.model_dir:
+        if "CosyVoice2" in args.model_dir or "CosyVoice3" in args.model_dir:
             if instruct_text == "":
                 gr.Warning("您正在使用自然语言控制模式, 请输入instruct文本")
                 yield (cosyvoice.sample_rate, default_data)
@@ -219,13 +241,6 @@ def generate_audio(
                 gr.Info("您正在使用自然语言控制模式, prompt音频/prompt文本会被忽略")
     # if cross_lingual mode, please make sure that model is iic/CosyVoice-300M and tts_text prompt_text are different language
     if mode_checkbox_group in ["跨语种复刻"]:
-        if cosyvoice.instruct is True:
-            gr.Warning(
-                "您正在使用跨语种复刻模式, {}模型不支持此模式, 请使用iic/CosyVoice-300M模型".format(
-                    args.model_dir
-                )
-            )
-            yield (cosyvoice.sample_rate, default_data)
         if instruct_text != "":
             gr.Info("您正在使用跨语种复刻模式, instruct文本会被忽略")
         if prompt_wav is None:
@@ -257,9 +272,14 @@ def generate_audio(
             gr.Info(
                 "您正在使用预训练音色模式，prompt文本/prompt音频/instruct文本会被忽略！"
             )
-        if sft_dropdown == "":
+        if sft_dropdown == "" and new_dropdown == "无":
             gr.Warning("没有可用的预训练音色！")
+            gr.Warning("请选择新增音色！")
             yield (cosyvoice.sample_rate, default_data)
+        elif new_dropdown != "无":
+            gr.Info("正在使用新增音色！")
+        elif sft_dropdown != "":
+            gr.Info("正在使用预训练音色！")
     # zero_shot mode only use prompt_wav prompt text
     if mode_checkbox_group in ["3s极速复刻"]:
         if prompt_text == "":
@@ -324,6 +344,7 @@ def generate_audio(
         logging.info("get zero_shot inference request")
         prompt_speech_16k = postprocess(load_wav(prompt_wav, prompt_sr))
         set_all_random_seed(seed)
+        prompt_text = "You are a helpful assistant.<|endofprompt|>" + prompt_text if prompt_text != "" else "请输入合成文本"
         if stream:
             for i in cosyvoice.inference_zero_shot(
                 tts_text, prompt_text, prompt_speech_16k, stream=stream, speed=speed
@@ -368,6 +389,7 @@ def generate_audio(
         logging.info("get cross_lingual inference request")
         prompt_speech_16k = postprocess(load_wav(prompt_wav, prompt_sr))
         set_all_random_seed(seed)
+        tts_text = "You are a helpful assistant.<|endofprompt|>" + tts_text if tts_text != "" else "请输入合成文本"
         if stream:
             for i in cosyvoice.inference_cross_lingual(
                 tts_text, prompt_speech_16k, stream=stream, speed=speed
@@ -411,7 +433,7 @@ def generate_audio(
     else:
         logging.info("get instruct inference request")
         set_all_random_seed(seed)
-        if "CosyVoice2" in args.model_dir:
+        if "CosyVoice2" in args.model_dir or "CosyVoice3" in args.model_dir:
             prompt_speech_16k = postprocess(load_wav(prompt_wav, prompt_sr))
             if stream:
                 for i in cosyvoice.inference_instruct2(
@@ -520,10 +542,11 @@ def main():
             "我们走的每一步，都是我们策略的一部分；你看到的所有一切，包括我此刻与你交谈，所做的一切，所说的每一句话，都有深远的含义。",
             "那位喜剧演员真有才，[laughter]一开口就让全场观众爆笑。",
             "他搞的一个恶作剧，让大家<laughter>忍俊不禁</laughter>。",
-            "希望你以后能够做的比我还好呦。",
             "I am a newly launched generative speech large model by the Qwen Voice Team of the Tongyi Laboratory, offering comfortable and natural text-to-speech synthesis capabilities.",
             "收到好友从远方寄来的生日礼物，那份意外的惊喜与深深的祝福让我心中充满了甜蜜的快乐，笑容如花儿般绽放。",
-            "You are a helpful assistant. 请用广东话表达。<|endofprompt|>我最近迷上一部经典港剧，入面嗰啲对白真系有嚟头。",
+            "Her handwriting is [M][AY0][N][UW1][T]并且很整洁，说明她[h][ào]干净。",
+            "[breath]因为他们那一辈人[breath]在乡里面住的要习惯一点，[breath]邻居都很活络，[breath]嗯，都很熟悉。[breath]",
+            "高管也通过电话、短信、微信等方式对报道[j][ǐ]予好评。",
         ]
         tts_text = gr.Textbox(
             label="输入合成文本",
@@ -655,84 +678,22 @@ def main():
             inputs=[prompt_wav_upload, prompt_wav_record],
             outputs=[prompt_text],
         )
-        # prompt_wav_upload.change(fn=prompt_wav_recognition, inputs=[prompt_wav_upload], outputs=[prompt_text])
-        # prompt_wav_record.change(fn=prompt_wav_recognition, inputs=[prompt_wav_record], outputs=[prompt_text])
+        
+        instruct_text_preset = gr.Dropdown(
+            choices=instruct_list,
+            label="选择instruct文本",
+            value=instruct_list[0],
+        )
         instruct_text = gr.Textbox(
             label="输入instruct文本",
             lines=1,
-            placeholder="请输入instruct文本。例如：用四川话说这句话。",
-            value="",
+            placeholder="请输入instruct文本。例如：You are a helpful assistant. 请非常开心地说一句话。<|endofprompt|>",
+            value=instruct_text_preset.value,
         )
-        gr.Examples(
-            label="角色扮演控制",
-            examples=[
-                "神秘",
-                "凶猛",
-                "好奇",
-                "优雅",
-                "孤独",
-                "模仿机器人风格",
-                "我想听听你模仿小猪佩奇的语气",
-                "一个活泼、爱冒险的小精灵",
-                "一位权威、威严的古代将军",
-                "一个忧郁的诗人",
-            ],
-            inputs=[instruct_text],
-        )
-        gr.Examples(
-            label="方言控制",
-            examples=[
-                "用四川话说这句话",
-                "用粤语说这句话",
-                "用上海话说这句话",
-                "用郑州话说这句话",
-                "用长沙话说这句话",
-                "用天津话说这句话",
-            ],
-            inputs=[instruct_text],
-        )
-        gr.Examples(
-            label="情感风格",
-            examples=[
-                "用开心的语气说",
-                "用伤心的语气说",
-                "用惊讶的语气说",
-                "用生气的语气说",
-                "用恐惧的情感表达",
-                "用恶心的情感表达",
-            ],
-            inputs=[instruct_text],
-        )
-        gr.Examples(
-            label="语速控制",
-            examples=[
-                "快速",
-                "非常快速",
-                "慢速",
-                "非常慢速",
-            ],
-            inputs=[instruct_text],
-        )
-        gr.Examples(
-            label="语气控制",
-            examples=[
-                "冷静",
-                "严肃",
-            ],
-            inputs=[instruct_text],
-        )
-        gr.Examples(
-            label="英文风格",
-            examples=[
-                "Selene 'Moonshade', is a mysterious, elegant dancer with a connection to the night. Her movements are both mesmerizing and deadly. ",
-                "A female speaker with normal pitch, slow speaking rate, and sad emotion.",
-                "Bubbling with happiness",
-                "Overcome with sorrow",
-                "Speaking very fast",
-                "Speaking with patience",
-            ],
-            inputs=[instruct_text],
-        )
+        # 添加事件监听器
+        instruct_text_preset.change(fn=lambda preset: preset, inputs=instruct_text_preset, outputs=instruct_text)
+        # prompt_wav_upload.change(fn=prompt_wav_recognition, inputs=[prompt_wav_upload], outputs=[prompt_text])
+        # prompt_wav_record.change(fn=prompt_wav_recognition, inputs=[prompt_wav_record], outputs=[prompt_text])
         new_name = gr.Textbox(
             label="输入新的音色名称", lines=1, placeholder="输入新的音色名称.", value=""
         )

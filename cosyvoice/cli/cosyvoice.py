@@ -108,26 +108,17 @@ class CosyVoice:
         torch.save(self.frontend.spk2info, '{}/spk2info.pt'.format(self.model_dir))
 
     def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0, text_frontend=True, new_dropdown="无"):
-        
-        default_voices = ['中文女', '中文男', '日语男', '粤语女', '英文女', '英文男', '韩语女']
-
         tts_speeches = []
         audio_opt = []
         audio_samples = 0
         srtlines = []
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True, text_frontend=text_frontend)):
-            if new_dropdown != "无" or spk_id not in default_voices:
-
-                model_input = self.frontend.frontend_sft(i,"中文女")
-
-                print({grandparent_dir})
-
-                if new_dropdown != "无":
-
-                    newspk = torch.load(f'{grandparent_dir}/voices/{new_dropdown}.pt')
-                else:
-                    newspk = torch.load(f'{grandparent_dir}/voices/{spk_id}.pt')
-
+            # print(grandparent_dir)
+            if new_dropdown != "无":
+                newspk = torch.load(f'{grandparent_dir}/voices/{new_dropdown}.pt')
+                
+                tts_text_token, tts_text_token_len = self.frontend._extract_text_token(i)
+                model_input = {'text': tts_text_token, 'text_len': tts_text_token_len}
                 model_input["flow_embedding"] = newspk["flow_embedding"] 
                 model_input["llm_embedding"] = newspk["llm_embedding"]
 
@@ -143,7 +134,6 @@ class CosyVoice:
                 model_input["prompt_text_len"] = newspk["prompt_text_len"]
                 
             else:
-            
                 model_input = self.frontend.frontend_sft(i, spk_id)
             
             start_time = time.time()
@@ -156,7 +146,7 @@ class CosyVoice:
                 numpy_array = model_output['tts_speech'].numpy()
                 # 使用 np.ravel() 方法将多维数组展平成一维数组
                 audio = numpy_array.ravel()
-                print(audio)
+                # print(audio)
                 srtline_begin=ms_to_srt_time(audio_samples*1000.0 / 22050)
                 audio_samples += audio.size
                 srtline_end=ms_to_srt_time(audio_samples*1000.0 / 22050)
